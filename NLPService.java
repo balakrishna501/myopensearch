@@ -1,17 +1,17 @@
 // NLPService.java
 
-import opennlp.tools.doccat.DocumentCategorizerME;
-import opennlp.tools.doccat.DocumentCategorizerModel;
-import opennlp.tools.namefinder.NameFinderME;
-import opennlp.tools.namefinder.NameFinderModel;
-import opennlp.tools.postag.POSModel;
-import opennlp.tools.postag.POSTaggerME;
-import opennlp.tools.sentdetect.SentenceDetectorME;
-import opennlp.tools.sentdetect.SentenceDetectorModel;
-import opennlp.tools.tokenize.SimpleTokenizer;
-import opennlp.tools.tokenize.Tokenizer;
-import opennlp.tools.tokenize.TokenizerME;
-import opennlp.tools.tokenize.TokenizerModel;
+import org.apache.opennlp.tools.doccat.DocumentCategorizerME;
+import org.apache.opennlp.tools.doccat.DocumentCategorizerModel;
+import org.apache.opennlp.tools.namefinder.NameFinderME;
+import org.apache.opennlp.tools.namefinder.NameFinderModel;
+import org.apache.opennlp.tools.postag.POSModel;
+import org.apache.opennlp.tools.postag.POSTaggerME;
+import org.apache.opennlp.tools.sentdetect.SentenceDetectorME;
+import org.apache.opennlp.tools.sentdetect.SentenceDetectorModel;
+import org.apache.opennlp.tools.tokenize.SimpleTokenizer;
+import org.apache.opennlp.tools.tokenize.Tokenizer;
+import org.apache.opennlp.tools.tokenize.TokenizerME;
+import org.apache.opennlp.tools.tokenize.TokenizerModel;
 
 import java.io.File;
 import java.io.FileInputStream;
