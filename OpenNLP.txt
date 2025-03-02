@@ -1,0 +1,74 @@
+@Component
+public class OpenNLP {
+  
+  @Value("classpath:en-token.bin")
+  private Resource tokenizerModelResource;
+  
+  @Value("classpath:en-pos-maxent.bin")
+  private Resource posTaggerModelResource;
+  
+  @Value("classpath:en-ner-person.bin")
+  private Resource nameFinderModelResource;
+  
+  @Value("classpath:en-lemmatizer.bin")
+  private Resource lemmatizerModelResource;
+  
+  @Value("classpath:en-sentiment.bin")
+  private Resource sentimentModelResource;
+  
+  private TokenizerModel tokenizerModel;
+  private POSTaggerModel posTaggerModel;
+  private TokenNameFinderModel nameFinderModel;
+  private LemmatizerModel lemmatizerModel;
+  private SentimentModel sentimentModel;
+  
+  @PostConstruct
+  public void init() throws IOException {
+    tokenizerModel = new TokenizerModel(tokenizerModelResource.getInputStream());
+    posTaggerModel = new POSTaggerModel(posTaggerModelResource.getInputStream());
+    nameFinderModel = new TokenNameFinderModel(nameFinderModelResource.getInputStream());
+    lemmatizerModel = new LemmatizerModel(lemmatizerModelResource.getInputStream());
+    sentimentModel = new SentimentModel(sentimentModelResource.getInputStream());
+  }
+  
+  public String[] tokenize(String text) throws IOException {
+    Tokenizer tokenizer = new TokenizerME(tokenizerModel);
+    return tokenizer.tokenize(text);
+  }
+  
+  public String[] posTag(String[] tokens) throws IOException {
+    POSTaggerME posTagger = new POSTaggerME(posTaggerModel);
+    return posTagger.tag(tokens);
+  }
+  
+  public Span[] nameFind(String[] tokens) throws IOException {
+    NameFinderME nameFinder = new NameFinderME(nameFinderModel);
+    return nameFinder.find(tokens);
+  }
+  
+  public String[] lemmatize(String[] tokens, String[] posTags) throws IOException {
+    LemmatizerME lemmatizer = new LemmatizerME(lemmatizerModel);
+    return lemmatizer.lemmatize(tokens, posTags);
+  }
+  
+  public double sentiment(String[] tokens) throws IOException {
+    // Initialize the sentiment score
+    double sentimentScore = 0;
+    
+    // Iterate over the tokens and calculate the sentiment score
+    for (String token : tokens) {
+      String[] outcomes = sentimentModel.categorize(token);
+      String outcome = outcomes[0];
+      
+      // Update the sentiment score based on the outcome
+      if (outcome.equals("positive")) {
+        sentimentScore += 1;
+      } else if (outcome.equals("negative")) {
+        sentimentScore -= 1;
+      }
+    }
+    
+    // Return the average sentiment score
+    return sentimentScore / tokens.length;
+  }
+}

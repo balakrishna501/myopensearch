@@ -1,0 +1,15 @@
+// SearchController.java
+
+@RestController
+@RequestMapping("/search")
+public class SearchController {
+
+    @Autowired
+    private NLPOpenSearchService nlpOpenSearchService;
+
+    @GetMapping
+    public List<Map<String, Object>> search(@RequestParam String query) throws IOException {
+        String indexName = "my_index"; // Replace with your index name
+        return nlpOpenSearchService.search(indexName, query);
+    }
+}

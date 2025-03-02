@@ -1,0 +1,108 @@
+import org.apache.opennlp.tools.doccat.DocumentCategorizerME;
+import org.apache.opennlp.tools.doccat.DocumentCategorizerModel;
+import org.apache.opennlp.tools.langdetect.LanguageDetectorME;
+import org.apache.opennlp.tools.langdetect.LanguageDetectorModel;
+import org.apache.opennlp.tools.langdetect.Language;
+import org.apache.opennlp.tools.namefinder.NameFinderME;
+import org.apache.opennlp.tools.namefinder.NameFinderModel;
+import org.apache.opennlp.tools.namefinder.TokenNameFinderModel;
+import org.apache.opennlp.tools.postag.POSModel;
+import org.apache.opennlp.tools.postag.POSTaggerME;
+import org.apache.opennlp.tools.sentiment.SentimentModel;
+import org.apache.opennlp.tools.sentiment.Sentiment;
+import org.apache.opennlp.tools.tokenize.Tokenizer;
+import org.apache.opennlp.tools.tokenize.TokenizerME;
+import org.apache.opennlp.tools.tokenize.TokenizerModel;
+import org.apache.opennlp.tools.lemmatizer.LemmatizerME;
+import org.apache.opennlp.tools.lemmatizer.LemmatizerModel;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class NLPService {
+
+    @Autowired
+    private OpenNLP openNLP;
+
+    @Autowired
+    private RestHighLevelClient restHighLevelClient;
+
+    public List<Map<String, Object>> search(String indexName, String query) throws IOException {
+        // Tokenize the query
+        String[] tokens = openNLP.tokenize(query);
+
+        // Perform POS tagging
+        String[] posTags = openNLP.posTag(tokens);
+
+        // Perform named entity recognition
+        Span[] nameSpans = openNLP.nameFind(tokens);
+
+        // Lemmatize the tokens
+        String[] lemmas = openNLP.lemmatize(tokens, posTags);
+
+        // Perform sentiment analysis
+        double sentiment = openNLP.sentiment(tokens);
+
+        // Create a query builder
+        BoolQueryBuilder boolQueryBuilder = buildQuery(tokens, posTags, nameSpans, lemmas, sentiment);
+
+        // Execute the search
+        SearchRequest searchRequest = new SearchRequest(indexName);
+        searchRequest.source(new SearchSourceBuilder().query(boolQueryBuilder));
+        SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+
+        // Extract the search results
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (SearchHit hit : searchResponse.getHits().getHits()) {
+            results.add(hit.getSourceAsMap());
+        }
+
+        return results;
+    }
+
+    private BoolQueryBuilder buildQuery(String[] tokens, String[] posTags, Span[] nameSpans, String[] lemmas, double sentiment) {
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        for (String token : tokens) {
+            boolQueryBuilder.should(QueryBuilders.matchQuery("_all", token));
+        }
+
+        for (String posTag : posTags) {
+            if (posTag.startsWith("NN")) {
+                boolQueryBuilder.filter(QueryBuilders.termQuery("_all", posTag));
+            } else if (posTag.startsWith("VB")) {
+                boolQueryBuilder.filter(QueryBuilders.termQuery("_all", posTag));
+            }
+        }
+
+        for (Span nameSpan : nameSpans) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("_all", nameSpan.toString()));
+        }
+
+        for (String lemma : lemmas) {
+            boolQueryBuilder.should(QueryBuilders.matchQuery("_all", lemma));
+        }
+
+        if (sentiment > 0) {
+            boolQueryBuilder.filter(QueryBuilders.rangeQuery("sentiment").gt(0));
+        } else if (sentiment < 0) {
+            boolQueryBuilder.filter(QueryBuilders.rangeQuery("sentiment").lt(0));
+        }
+
+        return boolQueryBuilder;
+    }
+}

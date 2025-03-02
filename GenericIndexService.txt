@@ -1,0 +1,49 @@
+// GenericIndexService.java
+
+@Service
+public class GenericIndexService {
+
+    @Autowired
+    private OpenSearchClient openSearchClient;
+
+    public List<Map<String, Object>> search(String indexName, Map<String, String> queryFeatures) throws IOException {
+        // Construct a search query based on the query features
+        SearchRequest searchRequest = constructSearchRequest(indexName, queryFeatures);
+
+        // Execute the search
+        SearchResponse searchResponse = openSearchClient.search(searchRequest);
+
+        // Extract the search results
+        List<Map<String, Object>> searchResults = new ArrayList<>();
+        for (SearchHit hit : searchResponse.hits().hits()) {
+            searchResults.add(hit.source());
+        }
+
+        return searchResults;
+    }
+
+    private SearchRequest constructSearchRequest(String indexName, Map<String, String> queryFeatures) {
+        // Simple implementation to construct a search request
+        SearchRequest searchRequest = SearchRequest.of(s -> s
+                .index(indexName)
+                .query(q -> q
+                        .bool(b -> b
+                                .filter(f -> f
+                                        .term(t -> t
+                                                .field("type")
+                                                .value(queryFeatures.get("objectType"))
+                                        )
+                                )
+                                .filter(f -> f
+                                        .term(t -> t
+                                                .field(queryFeatures.get("entity"))
+                                                .value(queryFeatures.get("value"))
+                                        )
+                                )
+                        )
+                )
+        );
+
+        return searchRequest;
+    }
+}
