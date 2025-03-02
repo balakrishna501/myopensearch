@@ -1,114 +1,78 @@
-// NLPService.java
+// NLPOpenSearchService.java
 
-import org.apache.opennlp.tools.doccat.DocumentCategorizerME;
-import org.apache.opennlp.tools.doccat.DocumentCategorizerModel;
-import org.apache.opennlp.tools.namefinder.NameFinderME;
-import org.apache.opennlp.tools.namefinder.NameFinderModel;
-import org.apache.opennlp.tools.postag.POSModel;
-import org.apache.opennlp.tools.postag.POSTaggerME;
-import org.apache.opennlp.tools.sentdetect.SentenceDetectorME;
-import org.apache.opennlp.tools.sentdetect.SentenceDetectorModel;
-import org.apache.opennlp.tools.tokenize.SimpleTokenizer;
-import org.apache.opennlp.tools.tokenize.Tokenizer;
-import org.apache.opennlp.tools.tokenize.TokenizerME;
-import org.apache.opennlp.tools.tokenize.TokenizerModel;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.OpenSearchClient;
+import org.opensearch.client.OpenSearchClients;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 @Service
-public class NLPService {
+public class NLPOpenSearchService {
 
-    private static final String SENTENCE_MODEL_FILE = "en-sent.bin";
-    private static final String TOKENIZER_MODEL_FILE = "en-token.bin";
-    private static final String POS_MODEL_FILE = "en-pos-maxent.bin";
-    private static final String NAME_FINDER_MODEL_FILE = "en-ner-person.bin";
-    private static final String DOCUMENT_CATEGORIZER_MODEL_FILE = "en-doccat.bin";
+    @Autowired
+    private NLPService nlpService;
 
-    private SentenceDetectorME sentenceDetector;
-    private TokenizerME tokenizer;
-    private POSTaggerME posTagger;
-    private NameFinderME nameFinder;
-    private DocumentCategorizerME documentCategorizer;
+    private final OpenSearchClient openSearchClient;
 
-    public NLPService() throws IOException {
-        loadModels();
+    public NLPOpenSearchService() {
+        openSearchClient = OpenSearchClients.create("http://localhost:9200");
     }
 
-    private void loadModels() throws IOException {
-        try (InputStream sentenceModelStream = getClass().getClassLoader().getResourceAsStream(SENTENCE_MODEL_FILE)) {
-            SentenceDetectorModel sentenceModel = new SentenceDetectorModel(sentenceModelStream);
-            sentenceDetector = new SentenceDetectorME(sentenceModel);
+    public List<Map<String, Object>> search(String indexName, String query) throws IOException {
+        // Tokenize the query
+        String[] tokens = nlpService.tokenizeQuery(query);
+
+        // Perform POS tagging
+        String[] posTags = nlpService.posTagQuery(tokens);
+
+        // Perform named entity recognition
+        Span[] nameSpans = nlpService.nameFindQuery(tokens);
+
+        // Extract intent and entity
+        String intent = nlpService.extractIntent(query, tokens);
+        String entity = nlpService.extractEntity(query, nameSpans);
+
+        // Construct a search query
+        SearchSourceBuilder searchSourceBuilder = constructESQuery(intent, entity, query, tokens, posTags, nameSpans);
+
+        // Execute the search
+        SearchRequest searchRequest = new SearchRequest(indexName);
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse searchResponse = openSearchClient.search(searchRequest);
+
+        // Extract the results
+        List<Map<String, Object>> results = new ArrayList<>();
+        SearchHits hits = searchResponse.getHits();
+        for (SearchHit hit : hits) {
+            results.add(hit.getSourceAsMap());
         }
 
-        try (InputStream tokenizerModelStream = getClass().getClassLoader().getResourceAsStream(TOKENIZER_MODEL_FILE)) {
-            TokenizerModel tokenizerModel = new TokenizerModel(tokenizerModelStream);
-            tokenizer = new TokenizerME(tokenizerModel);
-        }
-
-        try (InputStream posModelStream = getClass().getClassLoader().getResourceAsStream(POS_MODEL_FILE)) {
-            POSModel posModel = new POSModel(posModelStream);
-            posTagger = new POSTaggerME(posModel);
-        }
-
-        try (InputStream nameFinderModelStream = getClass().getClassLoader().getResourceAsStream(NAME_FINDER_MODEL_FILE)) {
-            NameFinderModel nameFinderModel = new NameFinderModel(nameFinderModelStream);
-            nameFinder = new NameFinderME(nameFinderModel);
-        }
-
-        try (InputStream documentCategorizerModelStream = getClass().getClassLoader().getResourceAsStream(DOCUMENT_CATEGORIZER_MODEL_FILE)) {
-            DocumentCategorizerModel documentCategorizerModel = new DocumentCategorizerModel(documentCategorizerModelStream);
-            documentCategorizer = new DocumentCategorizerME(documentCategorizerModel);
-        }
+        return results;
     }
 
-    public String[] tokenizeQuery(String query) {
-        return tokenizer.tokenize(query);
-    }
+    private SearchSourceBuilder constructESQuery(String intent, String entity, String query, String[] tokens, String[] posTags, Span[] nameSpans) {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
 
-    public String[] posTagQuery(String[] tokens) {
-        return posTagger.tag(tokens);
-    }
-
-    public Span[] nameFindQuery(String[] tokens) {
-        return nameFinder.find(tokens);
-    }
-
-    public String extractIntent(String query, String[] tokens) {
-        // Generic implementation to extract intent
-        for (String token : tokens) {
-            if (token.equalsIgnoreCase("find") || token.equalsIgnoreCase("get")) {
-                return "RETRIEVE";
-            } else if (token.equalsIgnoreCase("create") || token.equalsIgnoreCase("add")) {
-                return "CREATE";
-            } else if (token.equalsIgnoreCase("update") || token.equalsIgnoreCase("modify")) {
-                return "UPDATE";
-            } else if (token.equalsIgnoreCase("delete") || token.equalsIgnoreCase("remove")) {
-                return "DELETE";
+        if (intent.equals("RETRIEVE")) {
+            for (String token : tokens) {
+                if (posTags[tokens.indexOf(token)].startsWith("CD")) { // CD: Cardinal number
+                    searchSourceBuilder.query(QueryBuilders.rangeQuery(nlpService.extractFieldName(query, tokens, token)).gt(token));
+                } else if (posTags[tokens.indexOf(token)].startsWith("NN")) { // NN: Noun
+                    searchSourceBuilder.query(QueryBuilders.termQuery(nlpService.extractFieldName(query, tokens, token), token));
+                }
             }
         }
-        return "UNKNOWN";
-    }
 
-    public String extractEntity(String query, Span[] nameSpans) {
-        // Generic implementation to extract entity
-        for (Span span : nameSpans) {
-            if (span.getType().equals("PERSON") || span.getType().equals("ORGANIZATION") || span.getType().equals("LOCATION")) {
-                return span.getType();
-            }
-        }
-        return null;
-    }
-
-    public String extractFieldName(String query, String[] tokens, String token) {
-        // Generic implementation to extract field name
-        for (int i = 0; i < tokens.length; i++) {
-            if (tokens[i].equals(token) && i > 0) {
-                return tokens[i - 1].toLowerCase();
-            }
-        }
-        return null;
+        return searchSourceBuilder;
     }
 }
