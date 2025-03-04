@@ -1,0 +1,19 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class SearchController {
+    private final OpenSearchService openSearchService;
+
+    @Autowired
+    public SearchController(OpenSearchService openSearchService) {
+        this.openSearchService = openSearchService;
+    }
+
+    @GetMapping("/search")
+    public SearchResponse search(@RequestParam String indexName, @RequestParam String query) throws IOException {
+        return openSearchService.search(indexName, query);
+    }
+}
