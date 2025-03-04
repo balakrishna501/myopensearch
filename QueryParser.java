@@ -10,7 +10,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class QueryParser {
     private TokenizerModel tokenizerModel;
@@ -42,7 +44,7 @@ public class QueryParser {
         for (int i = 0; i < tokens.length; i++) {
             if (posTags[i].startsWith("NN")) {
                 // Noun, potential column name
-                columnName = tokens[i];
+                columnName = getActualFieldName(tokens[i]);
             } else if (isOperator(tokens[i])) {
                 // Operator
                 operator = tokens[i];
@@ -68,6 +70,18 @@ public class QueryParser {
         }
 
         return results;
+    }
+
+    private String getActualFieldName(String columnName) {
+        Map<String, List<String>> fieldMapping = FieldMappingConfig.getFieldMapping();
+        return fieldMapping.entrySet().stream()
+                .filter(entry -> entry.getValue().stream()
+                        .anyMatch(s -> s.equalsIgnoreCase(columnName) 
+                                || s.toLowerCase().contains(columnName.toLowerCase())
+                                || columnName.toLowerCase().contains(s.toLowerCase())))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean isOperator(String token) {
