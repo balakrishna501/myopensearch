@@ -1,0 +1,60 @@
+import { useRef, useEffect } from 'react';
+import Virtuoso from 'react-virtuoso';
+
+function YourComponent() {
+  const virtuosoRef = useRef(null);
+  const divRef = useRef(null);
+  const yourDataArray = Array.from({ length: 100 }, (_, index) => index);
+
+  useEffect(() => {
+    if (virtuosoRef.current) {
+      const lastItemIndex = yourDataArray.length - 1;
+      virtuosoRef.current.scrollToIndex(lastItemIndex);
+    }
+  }, [yourDataArray]);
+
+  useEffect(() => {
+    if (divRef.current && virtuosoRef.current) {
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect) {
+            divRef.current.style.height = `${entry.contentRect.height}px`;
+          }
+        }
+      });
+
+      resizeObserver.observe(virtuosoRef.current);
+
+      return () => {
+        resizeObserver.unobserve(virtuosoRef.current);
+      };
+    }
+  }, [virtuosoRef, divRef]);
+
+  return (
+    <div
+      ref={divRef}
+      style={{
+        backgroundColor: 'lightgray',
+        height: 'calc(100vh - 20px)', // Leave some space at the bottom
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Virtuoso
+        ref={virtuosoRef}
+        style={{ height: '100%' }}
+        data={yourDataArray}
+        itemContent={(index, data) => {
+          return (
+            <div style={{ height: 50 }}>
+              Item {index}
+            </div>
+          );
+        }}
+      />
+    </div>
+  );
+}
+
+export default YourComponent;
