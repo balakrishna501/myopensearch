@@ -58,3 +58,21 @@ function YourComponent() {
 }
 
 export default YourComponent;
+
+ useEffect(() => {
+    if (divRef.current && virtuosoRef.current) {
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect) {
+            divRef.current.style.height = `${entry.contentRect.height}px`;
+          }
+        }
+      });
+
+      resizeObserver.observe(virtuosoRef.current);
+
+      return () => {
+        resizeObserver.unobserve(virtuosoRef.current);
+      };
+    }
+  }, [virtuosoRef, divRef]);
